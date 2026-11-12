@@ -1,0 +1,8 @@
+{
+	"name": "firefly-pocket.com",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"test": "node --test test/"
+	}
+}
