@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'">
+	<title>Firefly Pocket on Hetzner</title>
+	<meta name="description" content="Make the cloud-init for a Hetzner server that sets up Firefly Pocket by itself. Nothing you type leaves your browser.">
+	<link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<main>
+	<h1>Firefly Pocket on Hetzner</h1>
+	<p class="lead">Answer three questions, paste the result into Hetzner's server form, point your domain at the server, and finish in your browser. No SSH.</p>
+
+	<section aria-labelledby="before">
+		<h2 id="before">Before you start</h2>
+		<ul>
+			<li><strong>Your bank must be covered by <a href="https://enablebanking.com">Enable Banking</a>.</strong> Check it first, before you pay for a server: it is how Firefly Pocket imports your transactions.</li>
+			<li>A domain you control, where you can add a DNS record. A subdomain such as <code>money.example.com</code> works.</li>
+			<li>A <a href="https://console.hetzner.cloud">Hetzner Cloud</a> account.</li>
+			<li>Later, in the console: an Anthropic or Gemini API key for category suggestions.</li>
+		</ul>
+	</section>
+
+	<section aria-labelledby="answers">
+		<h2 id="answers">1. Your answers</h2>
+		<p class="note">Everything you type stays in this page. It is not sent anywhere, and the page loads no outside scripts.</p>
+		<form id="answers-form" novalidate autocomplete="off">
+			<label for="domain">Domain</label>
+			<input id="domain" name="domain" type="text" inputmode="url" placeholder="money.example.com" spellcheck="false" autocapitalize="none" required>
+			<p class="hint">The five addresses Firefly Pocket answers on are built from it: <code>admin.</code>, <code>app.</code>, <code>firefly.</code>, <code>import.</code> and <code>legal.</code> in front.</p>
+			<p class="error" id="domain-error" role="alert" hidden></p>
+
+			<label for="email">Your email</label>
+			<input id="email" name="email" type="email" placeholder="you@example.com" spellcheck="false" autocapitalize="none" required>
+			<p class="hint">Your Firefly III login, and where Let's Encrypt sends certificate notices.</p>
+			<p class="error" id="email-error" role="alert" hidden></p>
+
+			<label for="timezone">Timezone</label>
+			<input id="timezone" name="timezone" type="text" placeholder="Europe/Ljubljana" spellcheck="false" autocapitalize="none" required>
+			<p class="hint">Filled from your browser. The nightly backup (02:00) and import (03:00) run in it.</p>
+			<p class="error" id="timezone-error" role="alert" hidden></p>
+
+			<details>
+				<summary>Advanced: an SSH key</summary>
+				<label for="ssh-key">Public key</label>
+				<textarea id="ssh-key" name="sshKey" rows="3" placeholder="ssh-ed25519 AAAA… you@laptop" spellcheck="false"></textarea>
+				<p class="hint">Leave empty if you will not use SSH: it is the only way back in if something goes wrong that the console cannot fix. The server never accepts passwords.</p>
+				<p class="error" id="sshKey-error" role="alert" hidden></p>
+			</details>
+		</form>
+	</section>
+
+	<section aria-labelledby="result" id="result-section" hidden>
+		<h2 id="result">2. Keep your setup code, copy the cloud config</h2>
+
+		<h3>Your setup code</h3>
+		<p class="code" id="setup-code" aria-live="polite"></p>
+		<p>Save it somewhere now, for instance in your password manager. You type it at <code>admin.<span class="domain-slot"></span></code> in step 4. It belongs to the cloud config below: both came from this page load, so if you reload the page, use the new pair.</p>
+		<p class="note">Lost it? Delete the server and start again from this page. Nothing is on it yet, so it costs a few minutes.</p>
+
+		<h3>Your cloud config</h3>
+		<textarea id="user-data" rows="10" readonly spellcheck="false" aria-label="Cloud config to paste into Hetzner"></textarea>
+		<p><button type="button" id="copy-user-data">Copy cloud config</button> <span id="copy-status" role="status"></span></p>
+	</section>
+
+	<section aria-labelledby="hetzner">
+		<h2 id="hetzner">3. Make the server</h2>
+		<p>In the <a href="https://console.hetzner.cloud">Hetzner Cloud Console</a>, add a server. Hetzner's wording may differ a little.</p>
+		<ol>
+			<li><strong>Location:</strong> one in the EU keeps your data there (Falkenstein, Nuremberg or Helsinki).</li>
+			<li><strong>Image:</strong> Ubuntu 24.04.</li>
+			<li><strong>Type:</strong> CX23 (2 vCPU, 4 GB). The whole stack idles around 1.5 GB.</li>
+			<li><strong>Networking:</strong> keep a public IPv4 address. Your bank connection and the backups need it.</li>
+			<li><strong>SSH keys:</strong> none, unless you filled in the advanced field. Hetzner then emails you a root password. You do not need it: the server refuses passwords over the network. It only works on Hetzner's web Console, if you ever need to look inside.</li>
+			<li><strong>Firewall:</strong> make one that allows incoming <code>TCP 80</code>, <code>TCP 443</code> and <code>UDP 443</code>, and nothing else. Add <code>TCP 22</code> only if you gave an SSH key.</li>
+			<li><strong>Cloud config:</strong> paste what you copied in step 2.</li>
+			<li>Create the server and copy its IPv4 address.</li>
+		</ol>
+	</section>
+
+	<section aria-labelledby="dns">
+		<h2 id="dns">4. Point your domain at it</h2>
+		<p>At your DNS provider, add this one record. Paste the server's address to see it with your domain.</p>
+		<label for="ip">Server IPv4 address</label>
+		<input id="ip" type="text" inputmode="decimal" placeholder="203.0.113.42" spellcheck="false" autocomplete="off">
+		<pre id="dns-record" aria-live="polite">*.&lt;your domain&gt;    A    &lt;server address&gt;</pre>
+		<p class="hint">The wildcard covers all five addresses. A DNS provider without wildcard records needs the five as separate A records. The server waits for <code>admin.</code> to point at it before it asks Let's Encrypt for certificates, so the order does not matter.</p>
+
+		<h3>Then open the console</h3>
+		<p>Give it about 5 to 10 minutes after the DNS record is live. Open <code>https://admin.<span class="domain-slot">&lt;your domain&gt;</span></code> and enter your setup code. The console takes you through the rest: your Firefly III account, your bank, category suggestions, alerts and backups.</p>
+	</section>
+
+	<section aria-labelledby="trouble">
+		<h2 id="trouble">If it does not open</h2>
+		<ul>
+			<li>Check that the DNS record is live: <code>admin.</code> in front of your domain should resolve to the server's address.</li>
+			<li>Still nothing after 20 minutes: in Hetzner, open your server and its <strong>Console</strong>. The login screen says where the setup stands.</li>
+			<li>Made a mistake in the answers? Delete the server and make a new one with a new cloud config from this page.</li>
+		</ul>
+	</section>
+</main>
+<script type="module" src="/js/form.js"></script>
+</body>
+</html>
